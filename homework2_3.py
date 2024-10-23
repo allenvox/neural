@@ -47,8 +47,8 @@ def backpropagation(images, hidden_activation, output, labels, W1, W2, b1, b2, l
     dL_db2 = torch.sum(dL_dz2, axis=0)
 
     # Обновляем веса и смещения второго слоя
-    W2 = W2.detach() - learning_rate * dL_dW2
-    b2 = b2.detach() - learning_rate * dL_db2
+    W2 = W2 - learning_rate * dL_dW2
+    b2 = b2 - learning_rate * dL_db2
 
     # Градиент по скрытому слою
     dL_da1 = torch.matmul(dL_dz2, W2.T)  # Градиент по активациям скрытого слоя
@@ -59,8 +59,8 @@ def backpropagation(images, hidden_activation, output, labels, W1, W2, b1, b2, l
     dL_db1 = torch.sum(dL_dz1, axis=0)
 
     # Обновляем веса и смещения первого слоя
-    W1 = W1.detach() - learning_rate * dL_dW1
-    b1 = b1.detach() - learning_rate * dL_db1
+    W1 = W1 - learning_rate * dL_dW1
+    b1 = b1 - learning_rate * dL_db1
 
     return W1, W2, b1, b2
 
