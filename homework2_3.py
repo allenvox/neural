@@ -27,6 +27,7 @@ def forward(images):
     # Первый слой (input -> hidden layer)
     z1 = torch.matmul(images, W1) + b1  # Взвешенная сумма входных данных
     a1 = torch.nn.functional.leaky_relu(z1, negative_slope=0.01) # Leaky ReLU
+    a1 = torch.nn.functional.dropout(a1, p=0.5)  # Применение Dropout с вероятностью 0.5
     
     # Второй слой (hidden layer -> output)
     z2 = torch.matmul(a1, W2) + b2    # Взвешенная сумма скрытого слоя
@@ -36,6 +37,12 @@ def forward(images):
 def compute_loss(output, labels):
     loss = F.cross_entropy(output, labels)
     return loss
+
+def calculate_accuracy(output, labels):
+    _, predicted = torch.max(output, 1)
+    correct = (predicted == labels).float().sum()
+    accuracy = correct / labels.size(0)
+    return accuracy
 
 def backpropagation(images, hidden_activation, output, labels, W1, W2, b1, b2, learning_rate=0.001):
     labels_one_hot = F.one_hot(labels, num_classes=output_size).float()
@@ -68,6 +75,8 @@ num_epochs = 50
 learning_rate = 0.001
 
 for epoch in range(num_epochs):
+    correct_predictions = 0
+    total_predictions = 0
     for batch_images, batch_labels in train_loader:
         batch_images = batch_images.view(-1, 28*28).to(device)
         batch_labels = batch_labels.to(device)
@@ -78,7 +87,12 @@ for epoch in range(num_epochs):
         # Backprop
         W1, W2, b1, b2 = backpropagation(batch_images, hidden_activation, output, batch_labels, W1, W2, b1, b2, learning_rate)
 
-    print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
+        accuracy = calculate_accuracy(output, batch_labels)
+        correct_predictions += accuracy.item() * batch_labels.size(0)
+        total_predictions += batch_labels.size(0)
+
+    avg_accuracy = correct_predictions / total_predictions
+    print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}, Accuracy: {avg_accuracy:.4f}')
     if torch.isnan(loss).any():
         print("Loss is NaN!")
         break
