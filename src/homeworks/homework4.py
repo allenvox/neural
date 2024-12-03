@@ -49,38 +49,42 @@ optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model.to(device)
 
+def compute_accuracy(loader, model):
+    model.eval()  # Режим оценки
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for images, labels in loader:
+            images, labels = images.to(device), labels.to(device)
+            outputs = model(images)
+            _, predicted = torch.max(outputs, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+    model.train()  # Возвращаемся в режим обучения
+    return 100 * correct / total
+
 for epoch in range(num_epochs):
-    model.train()
     running_loss = 0.0
     for i, (inputs, labels) in enumerate(train_loader):
         inputs, labels = inputs.to(device), labels.to(device)
-        
-        # Обнуление градиентов
-        optimizer.zero_grad()
-        
+
         # Прямой проход
         outputs = model(inputs)
         loss = criterion(outputs, labels)
-        
-        # Обратный проход
+
+        # Обратное распространение и оптимизация
+        optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        
+
+        # Вывод промежуточного лосса
         running_loss += loss.item()
-        if i % 100 == 99:  # Вывод каждые 100 батчей
-            print(f"[Epoch {epoch+1}, Batch {i+1}] Loss: {running_loss / 100:.3f}")
+        if (i + 1) % 100 == 0:  # Каждые 100 батчей
+            print(f"Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{len(train_loader)}], Loss: {running_loss / 100:.4f}")
             running_loss = 0.0
 
-# calculate accuracy
-model.eval()
-correct = 0
-total = 0
-with torch.no_grad():
-    for inputs, labels in test_loader:
-        inputs, labels = inputs.to(device), labels.to(device)
-        outputs = model(inputs)
-        _, predicted = torch.max(outputs, 1)
-        total += labels.size(0)
-        correct += (predicted == labels).sum().item()
+    # Вычисление точности на тренировочной выборке
+    train_accuracy = compute_accuracy(train_loader, model)
+    print(f"Epoch [{epoch+1}/{num_epochs}] completed. Training Accuracy: {train_accuracy:.2f}%")
 
-print(f"Accuracy on the test set: {100 * correct / total:.2f}%")
+print("Training finished.")
