@@ -5,15 +5,10 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.utils import resample
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 import matplotlib.pyplot as plt
+import time
 
-# Загрузка данных, вывод баланса классов на графике
+# Загрузка данных
 data = pd.read_csv('./data/creditcard.csv')
-count_classes = pd.Series(data['Class']).value_counts().sort_index()
-count_classes.plot(kind='bar')
-plt.title("Fraud class histogram")
-plt.xlabel("Class")
-plt.ylabel("Frequency")
-plt.show()
 
 # Проверка на пропущенные значения
 if data.isnull().values.any():
@@ -44,7 +39,7 @@ learning_rate = 0.1
 def sigmoid(z):
     return 1 / (1 + np.exp(-np.clip(z, -500, 500)))
 
-# Функция потерь с использованием весов классов
+# Функция потерь
 def compute_loss(y, y_hat, class_weights, epsilon=1e-9):
     y_hat = np.clip(y_hat, epsilon, 1 - epsilon)
     weight = np.where(y == 1, class_weights[1], class_weights[0])
@@ -73,11 +68,17 @@ def evaluate_model(X, y, weights, bias):
 # Установка весов классов
 class_weights = {0: 1, 1: len(data_class_0) / len(data_class_1_oversampled)}
 
-def train_logistic_regression(X, y, weights, bias, learning_rate, num_epochs, class_weights, tol=0.001, patience=10):
+def train_logistic_regression(X, y, weights, bias, learning_rate, num_epochs, class_weights, tol=0.01, patience=10):
     no_improve_count = 0
     best_loss = float('inf')
-    
+    times = []  # Время каждой эпохи
+    cumulative_times = []  # Накопленное время
+    roc_auc_scores = []  # ROC-AUC метрики
+    total_time = 0  # Накопленное время
+
     for epoch in range(num_epochs):
+        start_time = time.time()  # Начало замера времени
+
         # Прогноз и вычисление ошибки
         y_hat = predict(X, weights, bias)
         error = y_hat - y
@@ -90,12 +91,22 @@ def train_logistic_regression(X, y, weights, bias, learning_rate, num_epochs, cl
         weights -= learning_rate * dW
         bias -= learning_rate * dB
 
-        # Потери каждые 10 эпох
+        # Замер времени
+        end_time = time.time()
+        epoch_time = end_time - start_time
+        total_time += epoch_time
+        times.append(epoch_time)
+        cumulative_times.append(total_time)
+
+        # Вычисление метрики ROC-AUC каждые 10 эпох
         if epoch % 10 == 0:
             loss = compute_loss(y, y_hat, class_weights)
-            print(f"Epoch {epoch}, Loss: {loss:.4f}")
+            roc_auc = roc_auc_score(y, y_hat)
+            roc_auc_scores.append(roc_auc)
+
+            print(f"Epoch {epoch}, Loss: {loss:.4f}, ROC-AUC: {roc_auc:.4f}")
             
-            # Раняя остановка: если улучшение потерь незначительно
+            # Раняя остановка
             if loss < best_loss - tol:
                 best_loss = loss
                 no_improve_count = 0
@@ -106,10 +117,33 @@ def train_logistic_regression(X, y, weights, bias, learning_rate, num_epochs, cl
                 print(f"Early stopping at epoch {epoch} due to minimal loss improvement.")
                 break
     
-    return weights, bias
+    return weights, bias, times, cumulative_times, roc_auc_scores
 
 # Обучение модели
-weights, bias = train_logistic_regression(X_train, y_train, weights, bias, learning_rate, num_epochs=2000, class_weights=class_weights)
+weights, bias, times, cumulative_times, roc_auc_scores = train_logistic_regression(
+    X_train, y_train, weights, bias, learning_rate, num_epochs=2000, class_weights=class_weights
+)
 
 # Оценка на тестовой выборке
 evaluate_model(X_test, y_test, weights, bias)
+
+# График ROC-AUC
+plt.figure(figsize=(10, 6))
+plt.plot(range(0, len(roc_auc_scores) * 10, 10), roc_auc_scores, label='ROC-AUC', marker='o')
+plt.yscale('log')  # Логарифмическая шкала
+plt.xlabel('Epoch')
+plt.ylabel('ROC-AUC (log scale)')
+plt.title('ROC-AUC Score vs Epoch (Logarithmic Scale)')
+plt.legend()
+plt.grid()
+plt.show()
+
+# График накопленного времени
+plt.figure(figsize=(10, 6))
+plt.plot(range(len(cumulative_times)), cumulative_times, label='Cumulative Time', marker='o', color='orange')
+plt.xlabel('Epoch')
+plt.ylabel('Cumulative Time (seconds)')
+plt.title('Cumulative Training Time vs Epoch')
+plt.legend()
+plt.grid()
+plt.show()
