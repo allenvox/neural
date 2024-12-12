@@ -6,6 +6,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 from sklearn.utils import resample
 from sklearn.preprocessing import StandardScaler
 import time
+import matplotlib.pyplot as plt
 
 class DecisionTree:
     def __init__(self, max_depth=None, min_samples_split=2):
@@ -14,8 +15,6 @@ class DecisionTree:
         self.tree = None
 
     def fit(self, X, y, depth=0):
-        print(f"Depth: {depth}, Samples: {len(y)}")  # Отладочное сообщение
-
         # Условия остановки
         if depth >= self.max_depth or len(set(y)) == 1 or len(y) < self.min_samples_split:
             self.tree = Counter(y).most_common(1)[0][0]  # Присваиваем наиболее частый класс
@@ -24,7 +23,6 @@ class DecisionTree:
         # Находим наилучший разбиение по критерию Джини
         best_gini, best_idx, best_thr = 1, None, None
         for i in range(X.shape[1]):
-            # Уменьшаем количество порогов для ускорения
             thresholds = np.linspace(X[:, i].min(), X[:, i].max(), num=10)
             for thr in thresholds:
                 left_y = y[X[:, i] <= thr]
@@ -33,15 +31,10 @@ class DecisionTree:
                 if gini < best_gini:
                     best_gini, best_idx, best_thr = gini, i, thr
 
-        # Если не удалось найти подходящее разбиение
         if best_idx is None:
-            print("No split found, assigning majority class.")
             self.tree = Counter(y).most_common(1)[0][0]
             return
 
-        print(f"Best split: Feature {best_idx}, Threshold {best_thr}, Gini {best_gini}")
-
-        # Рекурсивно строим дерево
         self.tree = {
             'index': best_idx,
             'threshold': best_thr,
@@ -69,7 +62,6 @@ class DecisionTree:
     def predict(self, X):
         return np.array([self.predict_single(x) for x in X])
 
-
 class RandomForest:
     def __init__(self, n_estimators=10, max_depth=None, min_samples_split=2, max_features=None):
         self.n_estimators = n_estimators
@@ -77,40 +69,28 @@ class RandomForest:
         self.min_samples_split = min_samples_split
         self.max_features = max_features
         self.trees = []
+        self.timing_data = []
 
     def fit(self, X, y):
         self.trees = []
         n_samples = X.shape[0]
-        print("Training Random Forest...")
         for i in range(self.n_estimators):
-            print(f"Training tree {i+1}/{self.n_estimators}...")
             start_time = time.time()
             indices = np.random.choice(n_samples, n_samples, replace=True)
             tree = DecisionTree(max_depth=self.max_depth, min_samples_split=self.min_samples_split)
             tree.fit(X[indices], y[indices])
             self.trees.append(tree)
-            print(f"Tree {i+1} trained in {time.time() - start_time:.2f} seconds.")
+            elapsed_time = time.time() - start_time
+            self.timing_data.append((i + 1, elapsed_time))
 
     def predict(self, X):
-        print("Predicting with Random Forest...")
-        start_time = time.time()
         tree_preds = np.array([tree.predict(X) for tree in self.trees])
-        print(f"Prediction completed in {time.time() - start_time:.2f} seconds.")
         return np.round(np.mean(tree_preds, axis=0))
 
-
 # Загрузка данных
-print("Loading data...")
 data = pd.read_csv('./data/creditcard.csv')
 
-# Проверяем, что данные загружены корректно
-if data.isnull().values.any():
-    print("Data contains missing values. Please check the data source.")
-    exit()
-print("Data loaded successfully.")
-
 # Балансировка классов
-print("Balancing classes...")
 data_class_0 = data[data['Class'] == 0]
 data_class_1 = data[data['Class'] == 1]
 data_class_1_oversampled = resample(data_class_1,
@@ -118,39 +98,66 @@ data_class_1_oversampled = resample(data_class_1,
                                     n_samples=len(data_class_0),
                                     random_state=42)
 data_balanced = pd.concat([data_class_0, data_class_1_oversampled])
-print("Classes balanced.")
 
-# Масштабируем все числовые признаки, кроме `Class`
-print("Scaling data...")
+# Масштабирование данных
 features = data_balanced.drop('Class', axis=1).columns
 scaler = StandardScaler()
 data_balanced[features] = scaler.fit_transform(data_balanced[features])
-print("Data scaled.")
 
 # Разделение на тренировочную и тестовую выборки
-print("Splitting data...")
 X = data_balanced.drop('Class', axis=1).values
 y = data_balanced['Class'].values
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-print("Data split into training and testing sets.")
 
-# Создаем и обучаем модель
-print("Initializing Random Forest model...")
-model = RandomForest(n_estimators=10, max_depth=5, min_samples_split=10)
-model.fit(X_train, y_train)
+# Проведение эксперимента с различным числом деревьев и глубиной
+n_estimators_list = [5, 10, 20]
+max_depth_list = [3, 5, 7]
+metrics_data = []
 
-# Предсказания и метрики
-print("Calculating metrics...")
-y_pred = model.predict(X_test)
-accuracy = accuracy_score(y_test, y_pred)
-precision = precision_score(y_test, y_pred)
-recall = recall_score(y_test, y_pred)
-f1 = f1_score(y_test, y_pred)
-roc_auc = roc_auc_score(y_test, y_pred)
+for n_estimators in n_estimators_list:
+    for max_depth in max_depth_list:
+        model = RandomForest(n_estimators=n_estimators, max_depth=max_depth, min_samples_split=10)
+        model.fit(X_train, y_train)
 
-print("Metrics calculated:")
-print("Accuracy:", accuracy)
-print("Precision:", precision)
-print("Recall:", recall)
-print("F1 Score:", f1)
-print("ROC-AUC:", roc_auc)
+        y_pred = model.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+        precision = precision_score(y_test, y_pred)
+        recall = recall_score(y_test, y_pred)
+        f1 = f1_score(y_test, y_pred)
+        roc_auc = roc_auc_score(y_test, y_pred)
+
+        metrics_data.append({
+            'n_estimators': n_estimators,
+            'max_depth': max_depth,
+            'accuracy': accuracy,
+            'precision': precision,
+            'recall': recall,
+            'f1': f1,
+            'roc_auc': roc_auc
+        })
+
+# Построение графиков времени и метрик
+metrics_df = pd.DataFrame(metrics_data)
+
+# График времени обучения
+plt.figure(figsize=(10, 6))
+for n_estimators in n_estimators_list:
+    subset = metrics_df[metrics_df['n_estimators'] == n_estimators]
+    plt.plot(subset['max_depth'], subset['roc_auc'], label=f'n_estimators={n_estimators}', marker='o')
+
+plt.xlabel('Max Depth')
+plt.ylabel('ROC-AUC')
+plt.title('Random Forest Performance by Max Depth and n_estimators')
+plt.legend()
+plt.grid()
+plt.show()
+
+# Кумулятивное время построения деревьев
+cumulative_time = pd.DataFrame(model.timing_data, columns=['Tree', 'Time']).cumsum()
+plt.figure(figsize=(10, 6))
+plt.plot(cumulative_time['Tree'], cumulative_time['Time'], marker='o')
+plt.xlabel('Number of Trees')
+plt.ylabel('Cumulative Time (seconds)')
+plt.title('Cumulative Training Time of Random Forest')
+plt.grid()
+plt.show()
