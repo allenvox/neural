@@ -132,21 +132,19 @@ metrics_df = pd.DataFrame(metrics_data, columns=['max_depth', 'accuracy', 'preci
 
 # График времени
 plt.figure(figsize=(12, 6))
-plt.plot(timing_df['max_depth'], timing_df['time'], marker='o', label='Time')
-plt.xlabel('Max Depth')
-plt.ylabel('Time (seconds)')
-plt.title('Time vs Max Depth')
+plt.plot(timing_df['max_depth'], timing_df['time'], marker='o')
+plt.xlabel('Max Tree Depth')
+plt.ylabel('Cumulative Learning Time (seconds)')
 plt.grid()
 plt.legend()
 plt.show()
 
 # График метрик
 plt.figure(figsize=(12, 6))
-for metric in ['f1', 'roc_auc']:
-    plt.plot(metrics_df['max_depth'], metrics_df[metric], marker='o', label=metric)
-plt.xlabel('Max Depth')
-plt.ylabel('Metric Value')
-plt.title('Metrics vs Max Depth')
+for metric in ['roc_auc']:
+    plt.plot(metrics_df['max_depth'], metrics_df[metric], marker='o')
+plt.xlabel('Max Tree Depth')
+plt.ylabel('ROC-AUC')
 plt.grid()
 plt.legend()
 plt.show()

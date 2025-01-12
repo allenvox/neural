@@ -129,21 +129,19 @@ evaluate_model(X_test, y_test, weights, bias)
 
 # График ROC-AUC
 plt.figure(figsize=(10, 6))
-plt.plot(range(0, len(roc_auc_scores) * 10, 10), roc_auc_scores, label='ROC-AUC', marker='o')
-plt.yscale('log')  # Логарифмическая шкала
+plt.plot(range(0, len(roc_auc_scores) * 10, 10), roc_auc_scores, marker='o')
+#plt.yscale('log')  # Логарифмическая шкала
 plt.xlabel('Epoch')
-plt.ylabel('ROC-AUC (log scale)')
-plt.title('ROC-AUC Score vs Epoch (Logarithmic Scale)')
+plt.ylabel('ROC-AUC')
 plt.legend()
 plt.grid()
 plt.show()
 
 # График накопленного времени
 plt.figure(figsize=(10, 6))
-plt.plot(range(len(cumulative_times)), cumulative_times, label='Cumulative Time', marker='o', color='orange')
+plt.plot(range(len(cumulative_times)), cumulative_times, marker='o')
 plt.xlabel('Epoch')
-plt.ylabel('Cumulative Time (seconds)')
-plt.title('Cumulative Training Time vs Epoch')
+plt.ylabel('Cumulative Learning Time (seconds)')
 plt.legend()
 plt.grid()
 plt.show()
