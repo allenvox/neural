@@ -142,7 +142,7 @@ plt.show()
 
 # График метрик
 plt.figure(figsize=(12, 6))
-for metric in ['accuracy', 'precision', 'recall', 'f1', 'roc_auc']:
+for metric in ['f1', 'roc_auc']:
     plt.plot(metrics_df['max_depth'], metrics_df[metric], marker='o', label=metric)
 plt.xlabel('Max Depth')
 plt.ylabel('Metric Value')
