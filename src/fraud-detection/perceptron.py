@@ -45,17 +45,23 @@ class MLP(nn.Module):
         super(MLP, self).__init__()
         self.model = nn.Sequential(
             nn.Linear(input_size, 128),
+            nn.BatchNorm1d(128),  # Нормализация для стабилизации
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(0.2),
+
             nn.Linear(128, 64),
+            nn.BatchNorm1d(64),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(0.2),
+
             nn.Linear(64, 32),
+            nn.BatchNorm1d(32),
             nn.ReLU(),
+
             nn.Linear(32, 1),
-            nn.Sigmoid()
+            nn.Sigmoid()  # Для предсказания вероятностей
         )
-    
+
     def forward(self, x):
         return self.model(x)
 
@@ -63,46 +69,71 @@ class MLP(nn.Module):
 input_size = X_train.shape[1]
 model = MLP(input_size)
 
-# Определение функции потерь и оптимизатора
+# Функция потерь и оптимизатор
 criterion = nn.BCELoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)  # AdamW для лучшей регуляризации
 
-# Обучение модели
-num_epochs = 20
+# Сборка результатов
+num_epochs = 100
+accumulation_steps = 4  # Накопление градиентов для уменьшения шума
+
 train_losses = []
 val_roc_auc = []
 train_time = []
+best_roc_auc = 0
+early_stop_counter = 0
 
+# Цикл обучения
 for epoch in range(num_epochs):
     model.train()
-    epoch_start = time.time()
     epoch_loss = 0.0
-    
-    for X_batch, y_batch in train_loader:
-        optimizer.zero_grad()
+    epoch_start = time.time()
+
+    optimizer.zero_grad()
+    for step, (X_batch, y_batch) in enumerate(train_loader):
         y_pred = model(X_batch).squeeze()
         loss = criterion(y_pred, y_batch)
+        loss = loss / accumulation_steps  # Делим loss на количество шагов для накопления
         loss.backward()
-        optimizer.step()
+
+        if (step + 1) % accumulation_steps == 0:
+            optimizer.step()
+            optimizer.zero_grad()
+
         epoch_loss += loss.item()
-    
+
     train_losses.append(epoch_loss / len(train_loader))
     epoch_end = time.time()
     train_time.append(epoch_end - epoch_start)
 
-    # Оценка на тестовом наборе
+    # Оценка на валидации
     model.eval()
     y_test_pred = []
     with torch.no_grad():
         for X_batch, _ in test_loader:
             y_batch_pred = model(X_batch).squeeze()
             y_test_pred.extend(y_batch_pred.tolist())
-    
+
     # Расчет ROC-AUC
     roc_auc = roc_auc_score(y_test, y_test_pred)
     val_roc_auc.append(roc_auc)
 
     print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {train_losses[-1]:.4f}, ROC-AUC: {roc_auc:.4f}")
+
+    # Early Stopping
+    if roc_auc > best_roc_auc:
+        best_roc_auc = roc_auc
+        early_stop_counter = 0
+        best_model = model.state_dict()
+    else:
+        early_stop_counter += 1
+
+    if early_stop_counter >= 30:
+        print("Early stopping triggered!")
+        break
+
+# Загрузка лучших весов
+model.load_state_dict(best_model)
 
 # Финальная оценка метрик
 model.eval()
@@ -125,30 +156,26 @@ print(f"Recall: {recall:.4f}")
 print(f"F1 Score: {f1:.4f}")
 print(f"ROC-AUC: {roc_auc:.4f}")
 
-# Построение графиков
-plt.figure(figsize=(12, 6))
-
 # График ошибки
 plt.figure(figsize=(12, 6))
-plt.plot(range(1, num_epochs + 1), train_losses, marker='o')
+plt.plot(range(1, len(train_losses) + 1), train_losses, marker='o')  # Учитываем фактическую длину
 plt.xlabel('Epoch')
-plt.ylabel('Loss')
+plt.ylabel('Learning Loss')
 plt.legend()
+plt.show()
 
 # График ROC-AUC
 plt.figure(figsize=(12, 6))
-plt.plot(range(1, num_epochs + 1), val_roc_auc, marker='o')
+plt.plot(range(1, len(val_roc_auc) + 1), val_roc_auc, marker='o')  # Учитываем фактическую длину
 plt.xlabel('Epoch')
 plt.ylabel('ROC-AUC')
 plt.legend()
-
-plt.tight_layout()
 plt.show()
 
 # График кумулятивного времени
-cumulative_time = np.cumsum(train_time)
+cumulative_time = np.cumsum(train_time)  # Учитываем фактическую длину train_time
 plt.figure(figsize=(12, 6))
-plt.plot(range(1, num_epochs + 1), cumulative_time, marker='o')
+plt.plot(range(1, len(cumulative_time) + 1), cumulative_time, marker='o')
 plt.xlabel('Epoch')
 plt.ylabel('Cumulative Learning Time (seconds)')
 plt.legend()
